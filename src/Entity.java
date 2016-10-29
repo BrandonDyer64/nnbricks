@@ -3,16 +3,14 @@ import java.util.Random;
 
 public class Entity {
 
-    private static Random random = new Random();
-
     public MLP network;
-    public Point[] inputs = new Point[16];
+    public Point[] inputs = new Point[32];
     public int fitness = 0;
 
     public Entity() {
-        network = new MLP(inputs.length, new int[]{5, 2});
+        network = new MLP(inputs.length, new int[]{4, 1});
         for (int i = 0; i < inputs.length; i++) {
-            inputs[i] = new Point(MLP.random.nextInt(Driver.WIDTH), MLP.random.nextInt(Driver.HEIGHT));
+            inputs[i] = new Point(MLP.random.nextInt(Driver.WIDTH / 2), MLP.random.nextInt(Driver.HEIGHT / 2) + Driver.HEIGHT / 4);
         }
     }
 
@@ -26,9 +24,9 @@ public class Entity {
         for (int i = 0; i < inputs.length; i++) {
             Point p = new Point(inputs[i].x, inputs[i].y);
             newInputs[i] = p;
-            if (rate > 0) {
-                p.x += random.nextInt(3) - 1;
-                p.y += random.nextInt(3) - 1;
+            if (rate > 0 && MLP.random.nextFloat() < rate) {
+                p.x += MLP.random.nextInt(3) - 1;
+                p.y += MLP.random.nextInt(3) - 1;
             }
         }
         return new Entity(network.breed(rate), newInputs);

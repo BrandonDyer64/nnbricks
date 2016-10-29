@@ -1,8 +1,6 @@
 import java.awt.*;
+import java.awt.image.PackedColorModel;
 
-/**
- * Created by brandon on 10/26/16.
- */
 public class Enemy {
 
     public float x, y;
@@ -19,7 +17,10 @@ public class Enemy {
     }
 
     public void render(Graphics g) {
-        g.setColor(Color.RED);
+        if (x < 0) {
+            Driver.enemies.remove(this);
+        }
+        g.setColor(Color.LIGHT_GRAY);
         g.fillRect((int) x, (int) y, (int) 64, (int) 32);
     }
 

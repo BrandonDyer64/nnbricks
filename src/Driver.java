@@ -9,8 +9,8 @@ import java.util.Random;
 
 public class Driver implements Runnable, MouseListener {
 
-    public static final int GENERATION_SIZE = 200;
-    public static final int WIDTH = 300;
+    public static final int GENERATION_SIZE = 500;
+    public static final int WIDTH = 600;
     public static final int HEIGHT = 600;
     public static int SEED = 101;
 
@@ -19,11 +19,13 @@ public class Driver implements Runnable, MouseListener {
 
     Canvas canvas;
     Canvas altCanvas;
-    boolean fastTick = false;
+    int fastTick = 1;
     int generation = 0, networkSelector = 0, progress = 0;
     Entity[] entities = new Entity[GENERATION_SIZE];
-    public LinkedList<Enemy> enemies = new LinkedList<>();
+    public static LinkedList<Enemy> enemies = new LinkedList<>();
     public boolean forceBack = true;
+    public float playerY = 0;
+    public float bigSpec, lilSpec;
 
     public static final Random levelRandom = new Random(SEED);
 
@@ -60,7 +62,7 @@ public class Driver implements Runnable, MouseListener {
         long oldTime = 0;
         while (true) {
             long newTime = System.nanoTime();
-            if (newTime - oldTime > 1000000000 / 60 || fastTick) {
+            if ((newTime - oldTime > 1000000000 / 60 || (fastTick > 0 && networkSelector != 0)) || fastTick > 1) {
                 oldTime = newTime;
                 tick();
             }
@@ -92,10 +94,11 @@ public class Driver implements Runnable, MouseListener {
                 }
             }
             float[] out = network.run(inputs);
-            boolean shoot = out[1] >= 0.5f;
+            //boolean shoot = out[1] >= 0.5f;
             float up = out[0] * 2 - 1;
-            if (levelRandom.nextInt(15) == 0) {
-                enemies.add(new Enemy(canvas.getWidth(), levelRandom.nextInt(canvas.getHeight())));
+            playerY += up * Enemy.moveSpeed / 2;
+            if (levelRandom.nextInt(4) == 0) {
+                enemies.add(new Enemy(canvas.getWidth(), levelRandom.nextInt(canvas.getHeight()) * 3 - canvas.getHeight() / 2));
             }
             boolean nextEntity = false;
             for (int i = 0; i < enemies.size(); i++) {
@@ -105,6 +108,7 @@ public class Driver implements Runnable, MouseListener {
                 }
             }
             if (nextEntity) {
+                playerY = 0;
                 enemies.clear();
                 levelRandom.setSeed(SEED);
                 entity.fitness = progress;
@@ -115,6 +119,7 @@ public class Driver implements Runnable, MouseListener {
                 forceBack = true;
             }
         } else {
+            playerY = 0;
             if (networkSelector % 10 == 0)
                 System.out.print(networkSelector + " ");
             generation++;
@@ -135,12 +140,20 @@ public class Driver implements Runnable, MouseListener {
         }
         Graphics g = bs.getDrawGraphics();
 
-        if (!fastTick || forceBack) {
-            g.setColor(Color.BLACK);
+        if (fastTick < 2 || forceBack) {
+            g.setColor(Color.DARK_GRAY);
             g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
             forceBack = false;
         }
-        g.setColor(Color.green);
+
+        g.setColor(Color.GRAY);
+        g.drawLine(0, (int) playerY % (HEIGHT / 2) - HEIGHT / 2, WIDTH, (int) playerY % (HEIGHT / 2) - HEIGHT / 2);
+        g.drawLine(0, (int) playerY % (HEIGHT / 2) + HEIGHT / 2, WIDTH, (int) playerY % (HEIGHT / 2) + HEIGHT / 2);
+        g.drawLine(0, (int) playerY % (HEIGHT / 2) + HEIGHT, WIDTH, (int) playerY % (HEIGHT / 2) + HEIGHT);
+        g.drawLine(WIDTH - (int) (progress * Enemy.moveSpeed) % WIDTH, 0, WIDTH - (int) (progress * Enemy.moveSpeed) % WIDTH, HEIGHT);
+        g.drawLine(WIDTH - (int) (progress * Enemy.moveSpeed + WIDTH / 2) % WIDTH, 0, WIDTH - (int) (progress * Enemy.moveSpeed + WIDTH / 2) % WIDTH, HEIGHT);
+
+        g.setColor(Color.WHITE);
         Rectangle b = getBound();
         g.fillRect(b.x, b.y, 64, 32);
 
@@ -169,34 +182,47 @@ public class Driver implements Runnable, MouseListener {
         }
         Graphics g = bs.getDrawGraphics();
 
-        g.setColor(Color.BLACK);
+        g.setColor(Color.DARK_GRAY);
         g.fillRect(0, 0, altCanvas.getWidth(), altCanvas.getHeight());
         firstAltRender = false;
 
-        int scaleH = HEIGHT / (snapshots.size() + 1);
+        int H = altCanvas.getHeight();
+        int W = altCanvas.getWidth();
+
+        int scaleH = (W - 64) / (snapshots.size() + 1);
 
         for (int i = 0; i < speciesGraph.size(); i++) {
             for (int j = 0; j < speciesGraph.get(i).length; j++) {
                 Color c = speciesGraph.get(i)[j];
                 g.setColor(c);
-                g.fillRect(i * scaleH + 2, j * (160 / GENERATION_SIZE + 1) + 2, scaleH, (160 / GENERATION_SIZE) + 1);
+                if (c.equals(Color.BLACK)) {
+                    g.fillRect(i * scaleH + 2, (int) (j * (160f / GENERATION_SIZE)) + 1, scaleH, (160 / GENERATION_SIZE) + 2);
+                } else {
+                    g.fillRect(i * scaleH + 2, (int) (j * (160f / GENERATION_SIZE)) + 2, scaleH, (160 / GENERATION_SIZE) + 1);
+                }
             }
         }
 
         g.setColor(Color.GRAY);
-        g.drawLine(0, HEIGHT - 64, HEIGHT, HEIGHT - 64);
+        g.drawLine(0, H - 64, W, H - 64);
+        g.fillRect(0, H - 64 + 2, (int) (((float) networkSelector / entities.length) * W), 10);
 
         float scaleDown = 5;
         if (snapshots.size() > 1) {
-            scaleDown = 200f / snapshots.getLast().best;
+            scaleDown = 300f / snapshots.getLast().best;
+            g.setColor(Color.WHITE);
+            g.drawString(String.valueOf(snapshots.getLast().best),(snapshots.size()-1) * scaleH,(int) (H - 64 - snapshots.getLast().best * scaleDown));
+            g.drawString(String.valueOf(snapshots.getLast().worst),(snapshots.size()-1) * scaleH,(int) (H - 64 - snapshots.getLast().worst * scaleDown));
+            g.setColor(Color.RED);
+            g.drawString(String.valueOf(snapshots.getLast().median),(snapshots.size()-1) * scaleH,(int) (H - 64 - snapshots.getLast().median * scaleDown));
         }
 
         for (int i = 1; i < snapshots.size(); i++) {
             g.setColor(Color.WHITE);
-            g.drawLine((i - 1) * scaleH, (int) (HEIGHT - 64 - snapshots.get(i - 1).best * scaleDown), i * scaleH, (int) (HEIGHT - 64 - snapshots.get(i).best * scaleDown));
-            g.drawLine((i - 1) * scaleH, (int) (HEIGHT - 64 - snapshots.get(i - 1).worst * scaleDown), i * scaleH, (int) (HEIGHT - 64 - snapshots.get(i).worst * scaleDown));
+            g.drawLine((i - 1) * scaleH, (int) (H - 64 - snapshots.get(i - 1).best * scaleDown), i * scaleH, (int) (H - 64 - snapshots.get(i).best * scaleDown));
+            g.drawLine((i - 1) * scaleH, (int) (H - 64 - snapshots.get(i - 1).worst * scaleDown), i * scaleH, (int) (H - 64 - snapshots.get(i).worst * scaleDown));
             g.setColor(Color.RED);
-            g.drawLine((i - 1) * scaleH, (int) (HEIGHT - 64 - snapshots.get(i - 1).median * scaleDown), i * scaleH, (int) (HEIGHT - 64 - snapshots.get(i).median * scaleDown));
+            g.drawLine((i - 1) * scaleH, (int) (H - 64 - snapshots.get(i - 1).median * scaleDown), i * scaleH, (int) (H - 64 - snapshots.get(i).median * scaleDown));
         }
 
         g.dispose();
@@ -204,6 +230,8 @@ public class Driver implements Runnable, MouseListener {
     }
 
     public void nextGen() {
+        //if (generation % 10 == 0)
+        //    SEED++;
         float[] speciesf = new float[entities.length];
         for (int i = 0; i < entities.length; i++) {
             float speciess = entities[i].getSpecies();
@@ -214,7 +242,15 @@ public class Driver implements Runnable, MouseListener {
         Color[] species = new Color[entities.length];
         for (int i = 0; i < entities.length; i++) {
             float speciess = speciesf[i];
-            species[i] = new Color((int) (255f * speciess * 5) % 256, (int) (255f * speciess * 25) % 256, (int) (255f * speciess * 250) % 256);
+            if (speciesGraph.size() < 1) {
+                bigSpec = speciesf[speciesf.length - 1];
+                lilSpec = speciesf[0];
+            }
+            Color c = Color.getHSBColor(((speciess - bigSpec) / (bigSpec - lilSpec)) * 1.9f, 1, 1);
+            if (i > GENERATION_SIZE / 100 && speciesf[i] - speciesf[i - GENERATION_SIZE / 100] > 0.008f) {
+                c = Color.BLACK;
+            }
+            species[i] = c; // new Color((int) (255f * speciess * 5) % 256, (int) (255f * speciess * 25) % 256, (int) (255f * speciess * 250) % 256);
         }
         speciesGraph.add(species);
         //SEED++;
@@ -235,16 +271,16 @@ public class Driver implements Runnable, MouseListener {
         Snapshot snapshot = new Snapshot(best.fitness, fits[fits.length / 2], worst.fitness);
         snapshots.add(snapshot);
         System.out.println("Generation " + generation + " complete. " + "BEST: " + best.fitness);
-        int averageFit = (best.fitness + worst.fitness) / 2;
+        int averageFit = fits[fits.length / 2];
         newGen.add(best.breed(0));
         for (int i = 0; i < entities.length; i++) {
             Entity entity = entities[i];
             if (entity.fitness >= averageFit) {
-                newGen.add(entity.breed(1f / (generation / 10f)));
+                newGen.add(entity.breed(1f / (generation / 10f + 1)));
             }
         }
         while (newGen.size() < GENERATION_SIZE) {
-            newGen.add(newGen.get(MLP.random.nextInt(newGen.size())).breed(1f / (generation / 10f)));
+            newGen.add(newGen.get(MLP.random.nextInt(newGen.size())).breed(1f / (generation / 10f + 1)));
         }
         for (int i = 0; i < entities.length; i++) {
             entities[i] = newGen.get(i);
@@ -257,7 +293,7 @@ public class Driver implements Runnable, MouseListener {
 
     @Override
     public void mouseClicked(MouseEvent mouseEvent) {
-        fastTick = !fastTick;
+        fastTick = (fastTick + 1) % 3;
     }
 
     @Override
@@ -278,5 +314,38 @@ public class Driver implements Runnable, MouseListener {
     @Override
     public void mouseExited(MouseEvent mouseEvent) {
 
+    }
+
+    public static String hsvToRgb(float hue, float saturation, float value) {
+
+        int h = (int) (hue * 6);
+        float f = hue * 6 - h;
+        float p = value * (1 - saturation);
+        float q = value * (1 - f * saturation);
+        float t = value * (1 - (1 - f) * saturation);
+
+        switch (h) {
+            case 0:
+                return rgbToString(value, t, p);
+            case 1:
+                return rgbToString(q, value, p);
+            case 2:
+                return rgbToString(p, value, t);
+            case 3:
+                return rgbToString(p, q, value);
+            case 4:
+                return rgbToString(t, p, value);
+            case 5:
+                return rgbToString(value, p, q);
+            default:
+                throw new RuntimeException("Something went wrong when converting from HSV to RGB. Input was " + hue + ", " + saturation + ", " + value);
+        }
+    }
+
+    public static String rgbToString(float r, float g, float b) {
+        String rs = Integer.toHexString((int) (r * 256));
+        String gs = Integer.toHexString((int) (g * 256));
+        String bs = Integer.toHexString((int) (b * 256));
+        return rs + gs + bs;
     }
 }
